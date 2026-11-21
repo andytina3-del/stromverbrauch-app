@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#123b36">
+<title>Stromübersicht</title>
+<style>
+:root{--bg:#f3f6f4;--card:#fff;--ink:#172b27;--muted:#687873;--line:#e2eae6;--green:#176b57;--mint:#dff2e9;--blue:#3976a8;--orange:#d58a35;--shadow:0 8px 28px #173b3010}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:linear-gradient(120deg,#123b36,#1d6555);color:white;padding:24px max(18px,calc((100vw - 1180px)/2)) 28px}
+header .eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}h1{font-size:clamp(25px,4vw,36px);margin:5px 0 4px}header p{margin:0;color:#d4e6df}
+main{max-width:1180px;margin:20px auto;padding:0 16px 40px}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+select,button,.filelabel{font:inherit;border:1px solid var(--line);border-radius:11px;padding:10px 13px;background:white;color:var(--ink)}
+select{font-weight:650;min-width:115px}button,.filelabel{cursor:pointer;font-weight:600}button.primary{background:var(--green);color:#fff;border-color:var(--green)}button:hover,.filelabel:hover{filter:brightness(.97)}
+.spacer{flex:1}.note{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow);min-width:0}
+.kpi-label{font-size:12px;color:var(--muted)}.kpi-value{font-size:clamp(20px,3vw,27px);font-weight:750;margin-top:5px;letter-spacing:-.03em}.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 10px}.section-head h2{font-size:18px;margin:0}.section-head small{color:var(--muted)}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:white;box-shadow:var(--shadow)}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:1050px;font-size:13px}
+th{position:sticky;top:0;background:#edf4f0;color:#41534d;text-align:left;font-size:11px;line-height:1.25;padding:11px 8px;border-bottom:1px solid var(--line);vertical-align:bottom}
+td{padding:7px 6px;border-bottom:1px solid #edf1ef}tr:last-child td{border-bottom:0}td.month{font-weight:650;padding-left:12px;white-space:nowrap}
+td input{width:100%;min-width:82px;border:1px solid transparent;background:#f8faf9;border-radius:7px;padding:8px 7px;font:inherit;text-align:right;color:var(--ink)}
+td input:focus{outline:2px solid #86bca9;border-color:transparent;background:white}
+tfoot td{font-weight:750;background:#f2f7f4;padding:11px 8px}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}.chart-card h3{font-size:15px;margin:0 0 4px}.chart-card p{font-size:12px;color:var(--muted);margin:0 0 10px}
+canvas{width:100%;height:230px;display:block}
+.compare{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.compare select{min-width:100px}
+.compare-result{font-size:13px;color:var(--muted);margin-top:10px}
+.footer{color:var(--muted);font-size:12px;margin:18px 2px}
+input[type=file]{display:none}
+@media(max-width:760px){main{padding:0 10px 30px;margin-top:12px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.card{padding:13px}.charts{grid-template-columns:1fr}.toolbar{gap:7px}.toolbar button,.filelabel{padding:9px 10px;font-size:13px}.spacer{display:none}.section-head{margin-top:18px}}
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#123b36">
+<link rel="icon" href="icon-192.png">
+</head>
+<body>
+<header><div class="eyebrow">Deine Energie im Überblick</div><h1>Stromverbrauch &amp; Erzeugung</h1><p>Monatliche Werte erfassen, Entwicklungen erkennen und Jahre vergleichen.</p></header>
+<main>
+<div class="toolbar">
+<label for="yearSelect" style="font-weight:650">Jahr</label><select id="yearSelect" aria-label="Jahr auswählen"></select>
+<button class="primary" id="copyPrev">Vorjahr übernehmen</button>
+<span class="spacer"></span>
+<button id="exportBtn">Daten exportieren</button>
+<label class="filelabel" for="importFile">Importieren</label><input id="importFile" type="file" accept=".json,application/json">
+</div>
+<div class="note" id="saveStatus">Die Eingaben werden automatisch in diesem Browser gespeichert.</div>
+<div class="grid">
+ <div class="card"><div class="kpi-label">Gesamtverbrauch</div><div class="kpi-value" id="kpi-cons">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
+ <div class="card"><div class="kpi-label">PV-Erzeugung</div><div class="kpi-value" id="kpi-pv">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
+ <div class="card"><div class="kpi-label">Stromkosten</div><div class="kpi-value" id="kpi-cost">–</div><div class="kpi-sub">Summe der Monatskosten</div></div>
+ <div class="card"><div class="kpi-label">Netzeinspeisung</div><div class="kpi-value" id="kpi-feed">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
+</div>
+<div class="section-head"><h2>Monatliche Eingabe</h2><small>Werte in kWh, Kosten in €</small></div>
+<div class="table-wrap"><table><thead><tr><th>Monat</th><th>Gesamtverbrauch<br>in kWh</th><th>Tarif „Hoch“<br>in kWh</th><th>Tarif „Niedrig“<br>in kWh</th><th>Tarif „Standard“<br>in kWh</th><th>Kosten<br>in €</th><th>Wärmepumpe<br>Heizung (kWh)</th><th>Wärmepumpe<br>Warmwasser (kWh)</th><th>PV-Erzeugung<br>in kWh</th><th>Aus Speicher<br>in kWh</th><th>Abgabe ins Netz<br>in kWh</th></tr></thead><tbody id="monthRows"></tbody><tfoot id="totals"></tfoot></table></div>
+<div class="section-head"><h2>Diagramme</h2><small>Aktuelles Jahr · Monatswerte</small></div>
+<div class="charts">
+ <div class="card chart-card"><h3>Verbrauch &amp; PV-Erzeugung</h3><p>Monatlicher Vergleich in kWh</p><canvas id="energyChart"></canvas></div>
+ <div class="card chart-card"><h3>Stromkosten</h3><p>Kosten je Monat in Euro</p><canvas id="costChart"></canvas></div>
+ <div class="card chart-card"><h3>Wärmepumpe</h3><p>Heizung und Warmwasser in kWh</p><canvas id="heatChart"></canvas></div>
+ <div class="card chart-card"><h3>PV-Nutzung</h3><p>Erzeugung, Speicher und Netzeinspeisung in kWh</p><canvas id="pvChart"></canvas></div>
+</div>
+<div class="section-head"><h2>Jahresvergleich</h2><small>Jahressummen gegenüberstellen</small></div>
+<div class="card">
+ <div class="compare"><label>Jahr A <select id="yearA"></select></label><label>Jahr B <select id="yearB"></select></label><button id="compareBtn" class="primary">Vergleichen</button></div>
+ <div id="compareResult" class="compare-result">Wähle zwei Jahre aus, um die Jahressummen zu vergleichen.</div>
+</div>
+<div class="footer">Hinweis: Die Daten werden nur lokal im Browser dieses Geräts gespeichert. Exportiere regelmäßig eine Sicherung. Für die Nutzung auf mehreren Geräten bitte die JSON-Datei übertragen und dort importieren.</div>
+</main>
+<script>
+const months=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const fields=[
+ ['cons','Gesamtverbrauch'],['high','Tarif Hoch'],['low','Tarif Niedrig'],['standard','Tarif Standard'],['cost','Kosten'],
+ ['heat','Wärmepumpe Heizung'],['water','Wärmepumpe Warmwasser'],['pv','PV-Erzeugung'],['storage','Aus Speicher'],['feed','Abgabe ins Netz']
+];
+const STORE='stromuebersicht_2025_2040_v1';let data=load();let year=2025;
+function blankYear(){return Array.from({length:12},()=>Object.fromEntries(fields.map(([k])=>[k,''])));}
+function load(){try{return JSON.parse(localStorage.getItem(STORE))||{};}catch(e){return {};}}
+function ensure(y){if(!data[y])data[y]=blankYear();if(data[y].length!==12)data[y]=blankYear();}
+function save(){try{localStorage.setItem(STORE,JSON.stringify(data));document.getElementById('saveStatus').textContent='✓ Automatisch gespeichert · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}catch(e){document.getElementById('saveStatus').textContent='Speichern nicht möglich – bitte Daten exportieren.';}}
+const fmt=n=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(n);
+const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(n);
+const val=(y,m,k)=>Number(data[y]?.[m]?.[k])||0;
+function sum(y,k){return months.reduce((s,_,i)=>s+val(y,i,k),0);}
+function setupSelect(el,selected){el.innerHTML='';for(let y=2025;y<=2040;y++){let o=document.createElement('option');o.value=y;o.textContent=y;o.selected=y===selected;el.append(o);}}
+function render(){ensure(year);setupSelect(document.getElementById('yearSelect'),year);let body=document.getElementById('monthRows');body.innerHTML='';
+ months.forEach((m,i)=>{let tr=document.createElement('tr');let td=document.createElement('td');td.className='month';td.textContent=m;tr.append(td);
+ fields.forEach(([k,label])=>{let cell=document.createElement('td'),inp=document.createElement('input');inp.type='number';inp.inputMode='decimal';inp.min='0';inp.step='any';inp.placeholder='–';inp.setAttribute('aria-label',m+' '+label);inp.value=data[year][i][k];inp.addEventListener('input',()=>{data[year][i][k]=inp.value;save();update();});cell.append(inp);tr.append(cell);});body.append(tr);});
+ update();setupSelect(document.getElementById('yearA'),year);setupSelect(document.getElementById('yearB'),Math.min(2040,year+1));}
+function update(){let keys=fields.map(x=>x[0]);document.getElementById('totals').innerHTML='<tr><td>Jahressumme</td>'+keys.map(k=>'<td style="text-align:right">'+(k==='cost'?money(sum(year,k)):fmt(sum(year,k)))+'</td>').join('')+'</tr>';
+ document.getElementById('kpi-cons').textContent=fmt(sum(year,'cons'))+' kWh';document.getElementById('kpi-pv').textContent=fmt(sum(year,'pv'))+' kWh';document.getElementById('kpi-cost').textContent=money(sum(year,'cost'));document.getElementById('kpi-feed').textContent=fmt(sum(year,'feed'))+' kWh';drawCharts();}
+function canvas(id){let c=document.getElementById(id),r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=Math.max(300,r.width*dpr);c.height=230*dpr;let x=c.getContext('2d');x.scale(dpr,dpr);return {x,w:r.width,h:230};}
+function bars(id,series,unit){let {x,w,h}=canvas(id),left=38,right=8,top=12,bottom=27,plotH=h-top-bottom,plotW=w-left-right;let max=Math.max(1,...series.flatMap(s=>s.values))*1.12; x.font='10px system-ui';x.fillStyle='#71817a';x.strokeStyle='#e6ece8';for(let j=0;j<=4;j++){let y=top+plotH*j/4;x.beginPath();x.moveTo(left,y);x.lineTo(w-right,y);x.stroke();x.fillText(fmt(max*(1-j/4)),2,y+3);}let group=plotW/12,bw=Math.max(2,Math.min(13,group/(series.length+1)));
+ series.forEach((s,si)=>{x.fillStyle=s.color;s.values.forEach((v,i)=>{let bh=v/max*plotH,xx=left+i*group+group/2+(si-(series.length-1)/2)*(bw+2)-bw/2;x.fillRect(xx,top+plotH-bh,bw,bh);});});
+ x.fillStyle='#687873';months.forEach((m,i)=>{x.fillText(m.slice(0,3),left+i*group+group/2-9,h-9);});
+ let lx=left;series.forEach(s=>{x.fillStyle=s.color;x.fillRect(lx,2,8,8);x.fillStyle='#52645d';x.fillText(s.name,lx+11,10);lx+=Math.max(72,s.name.length*6+23);});}
+function drawCharts(){bars('energyChart',[{name:'Verbrauch',values:months.map((_,i)=>val(year,i,'cons')),color:'#26745e'},{name:'PV',values:months.map((_,i)=>val(year,i,'pv')),color:'#e3a33e'}],'kWh');
+ bars('costChart',[{name:'Kosten €',values:months.map((_,i)=>val(year,i,'cost')),color:'#3976a8'}],'€');
+ bars('heatChart',[{name:'Heizung',values:months.map((_,i)=>val(year,i,'heat')),color:'#d58a35'},{name:'Warmwasser',values:months.map((_,i)=>val(year,i,'water')),color:'#6e9fc2'}],'kWh');
+ bars('pvChart',[{name:'PV',values:months.map((_,i)=>val(year,i,'pv')),color:'#e3a33e'},{name:'Speicher',values:months.map((_,i)=>val(year,i,'storage')),color:'#3976a8'},{name:'Netz',values:months.map((_,i)=>val(year,i,'feed')),color:'#26745e'}],'kWh');}
+function compare(){let a=+document.getElementById('yearA').value,b=+document.getElementById('yearB').value;ensure(a);ensure(b);let metrics=[['cons','Verbrauch','kWh'],['pv','PV-Erzeugung','kWh'],['cost','Kosten','€'],['feed','Netzeinspeisung','kWh'],['heat','Wärmepumpe Heizung','kWh'],['water','Wärmepumpe Warmwasser','kWh']];document.getElementById('compareResult').innerHTML='<div style="overflow-x:auto"><table style="min-width:440px"><thead><tr><th>Kennzahl</th><th>'+a+'</th><th>'+b+'</th><th>Differenz</th></tr></thead><tbody>'+metrics.map(([k,n,u])=>{let av=sum(a,k),bv=sum(b,k),d=bv-av;return '<tr><td>'+n+'</td><td>'+ (u==='€'?money(av):fmt(av)+' '+u)+'</td><td>'+(u==='€'?money(bv):fmt(bv)+' '+u)+'</td><td style="color:'+(d>0?'#a65b35':d<0?'#26745e':'inherit')+'">'+(d>0?'+':'')+(u==='€'?money(d):fmt(d)+' '+u)+'</td></tr>';}).join('')+'</tbody></table></div>';}
+document.getElementById('yearSelect').addEventListener('change',e=>{year=+e.target.value;render();});
+document.getElementById('copyPrev').addEventListener('click',()=>{if(year===2025){alert('Für 2025 gibt es kein Vorjahr in dieser App.');return;}if(!confirm('Die Monatswerte aus '+(year-1)+' nach '+year+' kopieren? Vorhandene Werte im Zieljahr werden überschrieben.'))return;ensure(year-1);data[year]=JSON.parse(JSON.stringify(data[year-1]));save();render();});
+document.getElementById('compareBtn').addEventListener('click',compare);
+document.getElementById('exportBtn').addEventListener('click',()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='stromdaten-2025-2040.json';a.click();URL.revokeObjectURL(a.href);});
+document.getElementById('importFile').addEventListener('change',e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let obj=JSON.parse(r.result);if(!obj||typeof obj!=='object')throw 0;for(let y=2025;y<=2040;y++)if(obj[y]&&Array.isArray(obj[y])&&obj[y].length===12)data[y]=obj[y];save();render();alert('Daten wurden importiert.');}catch(err){alert('Die Datei konnte nicht gelesen werden. Bitte eine zuvor exportierte JSON-Datei wählen.');}};r.readAsText(f);e.target.value='';});
+window.addEventListener('resize',()=>drawCharts());for(let y=2025;y<=2040;y++)ensure(y);render();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(console.warn));
+}
+</script>
+</body></html>
