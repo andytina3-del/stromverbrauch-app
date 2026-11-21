@@ -49,6 +49,7 @@ input[type=file]{display:none}
 <label class="filelabel" for="importFile">Importieren</label><input id="importFile" type="file" accept=".json,application/json">
 </div>
 <div class="note" id="saveStatus">Die Eingaben werden automatisch in diesem Browser gespeichert.</div>
+<div class="note" id="backupStatus" style="margin-top:5px">Letzte Datensicherung: Noch keine Sicherung erstellt.</div>
 <div class="grid">
  <div class="card"><div class="kpi-label">Gesamtverbrauch</div><div class="kpi-value" id="kpi-cons">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
  <div class="card"><div class="kpi-label">PV-Erzeugung</div><div class="kpi-value" id="kpi-pv">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
@@ -81,6 +82,10 @@ const STORE='stromuebersicht_2025_2040_v1';let data=load();let year=2025;
 function blankYear(){return Array.from({length:12},()=>Object.fromEntries(fields.map(([k])=>[k,''])));}
 function load(){try{return JSON.parse(localStorage.getItem(STORE))||{};}catch(e){return {};}}
 function ensure(y){if(!data[y])data[y]=blankYear();if(data[y].length!==12)data[y]=blankYear();}
+function showBackupDate(){
+ const stamp=localStorage.getItem('stromuebersicht_last_backup');
+ document.getElementById('backupStatus').textContent=stamp ? 'Letzte Datensicherung: '+new Date(stamp).toLocaleString('de-DE') : 'Letzte Datensicherung: Noch keine Sicherung erstellt.';
+}
 function save(){try{localStorage.setItem(STORE,JSON.stringify(data));document.getElementById('saveStatus').textContent='✓ Automatisch gespeichert · '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}catch(e){document.getElementById('saveStatus').textContent='Speichern nicht möglich – bitte Daten exportieren.';}}
 const fmt=n=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(n);
 const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(n);
@@ -106,9 +111,17 @@ function compare(){let a=+document.getElementById('yearA').value,b=+document.get
 document.getElementById('yearSelect').addEventListener('change',e=>{year=+e.target.value;render();});
 document.getElementById('copyPrev').addEventListener('click',()=>{if(year===2025){alert('Für 2025 gibt es kein Vorjahr in dieser App.');return;}if(!confirm('Die Monatswerte aus '+(year-1)+' nach '+year+' kopieren? Vorhandene Werte im Zieljahr werden überschrieben.'))return;ensure(year-1);data[year]=JSON.parse(JSON.stringify(data[year-1]));save();render();});
 document.getElementById('compareBtn').addEventListener('click',compare);
-document.getElementById('exportBtn').addEventListener('click',()=>{let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='stromdaten-2025-2040.json';a.click();URL.revokeObjectURL(a.href);});
+document.getElementById('exportBtn').addEventListener('click',()=>{
+ let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+ let url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='stromdaten-2025-2040.json';a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ localStorage.setItem('stromuebersicht_last_backup',new Date().toISOString());
+ showBackupDate();
+ document.getElementById('saveStatus').textContent='✓ Sicherungsdatei wurde erstellt. Bitte im Ordner Downloads aufbewahren.';
+});
 document.getElementById('importFile').addEventListener('change',e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let obj=JSON.parse(r.result);if(!obj||typeof obj!=='object')throw 0;for(let y=2025;y<=2040;y++)if(obj[y]&&Array.isArray(obj[y])&&obj[y].length===12)data[y]=obj[y];save();render();alert('Daten wurden importiert.');}catch(err){alert('Die Datei konnte nicht gelesen werden. Bitte eine zuvor exportierte JSON-Datei wählen.');}};r.readAsText(f);e.target.value='';});
-window.addEventListener('resize',()=>drawCharts());for(let y=2025;y<=2040;y++)ensure(y);render();
+window.addEventListener('resize',()=>drawCharts());for(let y=2025;y<=2040;y++)ensure(y);render();showBackupDate();
 </script>
 
 <script>
