@@ -57,7 +57,7 @@ input[type=file]{display:none}
  <div class="card"><div class="kpi-label">Netzeinspeisung</div><div class="kpi-value" id="kpi-feed">–</div><div class="kpi-sub">kWh im ausgewählten Jahr</div></div>
 </div>
 <div class="section-head"><h2>Monatliche Eingabe</h2><small>Werte in kWh, Kosten in €</small></div>
-<div class="table-wrap"><table><thead><tr><th>Monat</th><th>Gesamtverbrauch<br>in kWh</th><th>Tarif „Hoch“<br>in kWh</th><th>Tarif „Niedrig“<br>in kWh</th><th>Tarif „Standard“<br>in kWh</th><th>Kosten<br>in €</th><th>Wärmepumpe<br>Heizung (kWh)</th><th>Wärmepumpe<br>Warmwasser (kWh)</th><th>PV-Erzeugung<br>in kWh</th><th>Aus Speicher<br>in kWh</th><th>Abgabe ins Netz<br>in kWh</th></tr></thead><tbody id="monthRows"></tbody><tfoot id="totals"></tfoot></table></div>
+<div class="table-wrap"><table><thead><tr><th>Monat</th><th>Gesamtverbrauch<br>in kWh</th><th>Tarif „Hoch“<br>in kWh</th><th>Tarif „Niedrig“<br>in kWh</th><th>Tarif „Standard“<br>in kWh</th><th>Kosten<br>in €</th><th>Wärmepumpe<br>Heizung (kWh)</th><th>Wärmepumpe<br>Warmwasser (kWh)</th><th>PV-Erzeugung<br>in kWh</th><th>Aus dem Netz<br>in kWh</th><th>Aus Speicher<br>in kWh</th><th>Verbrauch<br>in kWh</th><th>Stromabgabe ins Netz<br>in kWh</th><th>Stromabgabe in den Speicher<br>in kWh</th></tr></thead><tbody id="monthRows"></tbody><tfoot id="totals"></tfoot></table></div>
 <div class="section-head"><h2>Diagramme</h2><small>Aktuelles Jahr · Monatswerte</small></div>
 <div class="charts">
  <div class="card chart-card"><h3>Verbrauch &amp; PV-Erzeugung</h3><p>Monatlicher Vergleich in kWh</p><canvas id="energyChart"></canvas></div>
@@ -70,18 +70,36 @@ input[type=file]{display:none}
  <div class="compare"><label>Jahr A <select id="yearA"></select></label><label>Jahr B <select id="yearB"></select></label><button id="compareBtn" class="primary">Vergleichen</button></div>
  <div id="compareResult" class="compare-result">Wähle zwei Jahre aus, um die Jahressummen zu vergleichen.</div>
 </div>
-<div class="footer">Hinweis: Die Daten werden nur lokal im Browser dieses Geräts gespeichert. Exportiere regelmäßig eine Sicherung. Für die Nutzung auf mehreren Geräten bitte die JSON-Datei übertragen und dort importieren.</div>
+<div class="footer">Hinweis: Erfassungszeitraum: 2026–2045. Die Daten werden nur lokal im Browser dieses Geräts gespeichert. Exportiere regelmäßig eine Sicherung. Für die Nutzung auf mehreren Geräten bitte die JSON-Datei übertragen und dort importieren.</div>
 </main>
 <script>
 const months=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
 const fields=[
  ['cons','Gesamtverbrauch'],['high','Tarif Hoch'],['low','Tarif Niedrig'],['standard','Tarif Standard'],['cost','Kosten'],
- ['heat','Wärmepumpe Heizung'],['water','Wärmepumpe Warmwasser'],['pv','PV-Erzeugung'],['storage','Aus Speicher'],['feed','Abgabe ins Netz']
+ ['heat','Wärmepumpe Heizung'],['water','Wärmepumpe Warmwasser'],['pv','PV-Erzeugung'],['grid','Aus dem Netz'],['storage','Aus Speicher'],['usage','Verbrauch'],['feed','Stromabgabe ins Netz'],['storageIn','Stromabgabe in den Speicher']
 ];
-const STORE='stromuebersicht_2025_2040_v1';let data=load();let year=2025;
+const STORE='stromuebersicht_2026_2045_v2';
+const LEGACY_STORE='stromuebersicht_2025_2040_v1';
+let data=load();let year=2026;
 function blankYear(){return Array.from({length:12},()=>Object.fromEntries(fields.map(([k])=>[k,''])));}
-function load(){try{return JSON.parse(localStorage.getItem(STORE))||{};}catch(e){return {};}}
-function ensure(y){if(!data[y])data[y]=blankYear();if(data[y].length!==12)data[y]=blankYear();}
+function load(){
+ try{
+  const current=localStorage.getItem(STORE);
+  if(current)return JSON.parse(current)||{};
+  const legacy=JSON.parse(localStorage.getItem(LEGACY_STORE)||'{}')||{};
+  const migrated={};
+  for(let y=2026;y<=2040;y++)if(legacy[y])migrated[y]=legacy[y];
+  return migrated;
+ }catch(e){return {};}
+}
+function ensure(y){
+ if(!data[y]||data[y].length!==12)data[y]=blankYear();
+ data[y]=data[y].map(row=>{
+  const item=(row&&typeof row==='object')?row:{};
+  fields.forEach(([k])=>{if(item[k]===undefined||item[k]===null)item[k]='';});
+  return item;
+ });
+}
 function showBackupDate(){
  const stamp=localStorage.getItem('stromuebersicht_last_backup');
  document.getElementById('backupStatus').textContent=stamp ? 'Letzte Datensicherung: '+new Date(stamp).toLocaleString('de-DE') : 'Letzte Datensicherung: Noch keine Sicherung erstellt.';
@@ -91,11 +109,11 @@ const fmt=n=>new Intl.NumberFormat('de-DE',{maximumFractionDigits:1}).format(n);
 const money=n=>new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(n);
 const val=(y,m,k)=>Number(data[y]?.[m]?.[k])||0;
 function sum(y,k){return months.reduce((s,_,i)=>s+val(y,i,k),0);}
-function setupSelect(el,selected){el.innerHTML='';for(let y=2025;y<=2040;y++){let o=document.createElement('option');o.value=y;o.textContent=y;o.selected=y===selected;el.append(o);}}
+function setupSelect(el,selected){el.innerHTML='';for(let y=2026;y<=2045;y++){let o=document.createElement('option');o.value=y;o.textContent=y;o.selected=y===selected;el.append(o);}}
 function render(){ensure(year);setupSelect(document.getElementById('yearSelect'),year);let body=document.getElementById('monthRows');body.innerHTML='';
  months.forEach((m,i)=>{let tr=document.createElement('tr');let td=document.createElement('td');td.className='month';td.textContent=m;tr.append(td);
  fields.forEach(([k,label])=>{let cell=document.createElement('td'),inp=document.createElement('input');inp.type='number';inp.inputMode='decimal';inp.min='0';inp.step='any';inp.placeholder='–';inp.setAttribute('aria-label',m+' '+label);inp.value=data[year][i][k];inp.addEventListener('input',()=>{data[year][i][k]=inp.value;save();update();});cell.append(inp);tr.append(cell);});body.append(tr);});
- update();setupSelect(document.getElementById('yearA'),year);setupSelect(document.getElementById('yearB'),Math.min(2040,year+1));}
+ update();setupSelect(document.getElementById('yearA'),year);setupSelect(document.getElementById('yearB'),Math.min(2045,year+1));}
 function update(){let keys=fields.map(x=>x[0]);document.getElementById('totals').innerHTML='<tr><td>Jahressumme</td>'+keys.map(k=>'<td style="text-align:right">'+(k==='cost'?money(sum(year,k)):fmt(sum(year,k)))+'</td>').join('')+'</tr>';
  document.getElementById('kpi-cons').textContent=fmt(sum(year,'cons'))+' kWh';document.getElementById('kpi-pv').textContent=fmt(sum(year,'pv'))+' kWh';document.getElementById('kpi-cost').textContent=money(sum(year,'cost'));document.getElementById('kpi-feed').textContent=fmt(sum(year,'feed'))+' kWh';drawCharts();}
 function canvas(id){let c=document.getElementById(id),r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=Math.max(300,r.width*dpr);c.height=230*dpr;let x=c.getContext('2d');x.scale(dpr,dpr);return {x,w:r.width,h:230};}
@@ -106,22 +124,22 @@ function bars(id,series,unit){let {x,w,h}=canvas(id),left=38,right=8,top=12,bott
 function drawCharts(){bars('energyChart',[{name:'Verbrauch',values:months.map((_,i)=>val(year,i,'cons')),color:'#26745e'},{name:'PV',values:months.map((_,i)=>val(year,i,'pv')),color:'#e3a33e'}],'kWh');
  bars('costChart',[{name:'Kosten €',values:months.map((_,i)=>val(year,i,'cost')),color:'#3976a8'}],'€');
  bars('heatChart',[{name:'Heizung',values:months.map((_,i)=>val(year,i,'heat')),color:'#d58a35'},{name:'Warmwasser',values:months.map((_,i)=>val(year,i,'water')),color:'#6e9fc2'}],'kWh');
- bars('pvChart',[{name:'PV',values:months.map((_,i)=>val(year,i,'pv')),color:'#e3a33e'},{name:'Speicher',values:months.map((_,i)=>val(year,i,'storage')),color:'#3976a8'},{name:'Netz',values:months.map((_,i)=>val(year,i,'feed')),color:'#26745e'}],'kWh');}
-function compare(){let a=+document.getElementById('yearA').value,b=+document.getElementById('yearB').value;ensure(a);ensure(b);let metrics=[['cons','Verbrauch','kWh'],['pv','PV-Erzeugung','kWh'],['cost','Kosten','€'],['feed','Netzeinspeisung','kWh'],['heat','Wärmepumpe Heizung','kWh'],['water','Wärmepumpe Warmwasser','kWh']];document.getElementById('compareResult').innerHTML='<div style="overflow-x:auto"><table style="min-width:440px"><thead><tr><th>Kennzahl</th><th>'+a+'</th><th>'+b+'</th><th>Differenz</th></tr></thead><tbody>'+metrics.map(([k,n,u])=>{let av=sum(a,k),bv=sum(b,k),d=bv-av;return '<tr><td>'+n+'</td><td>'+ (u==='€'?money(av):fmt(av)+' '+u)+'</td><td>'+(u==='€'?money(bv):fmt(bv)+' '+u)+'</td><td style="color:'+(d>0?'#a65b35':d<0?'#26745e':'inherit')+'">'+(d>0?'+':'')+(u==='€'?money(d):fmt(d)+' '+u)+'</td></tr>';}).join('')+'</tbody></table></div>';}
+ bars('pvChart',[{name:'PV-Erzeugung',values:months.map((_,i)=>val(year,i,'pv')),color:'#e3a33e'},{name:'Aus Netz',values:months.map((_,i)=>val(year,i,'grid')),color:'#3976a8'},{name:'Aus Speicher',values:months.map((_,i)=>val(year,i,'storage')),color:'#6e9fc2'},{name:'Ins Netz',values:months.map((_,i)=>val(year,i,'feed')),color:'#26745e'},{name:'In Speicher',values:months.map((_,i)=>val(year,i,'storageIn')),color:'#d58a35'}],'kWh');}
+function compare(){let a=+document.getElementById('yearA').value,b=+document.getElementById('yearB').value;ensure(a);ensure(b);let metrics=[['cons','Gesamtverbrauch','kWh'],['pv','PV-Erzeugung','kWh'],['grid','Aus dem Netz','kWh'],['usage','Verbrauch','kWh'],['cost','Kosten','€'],['feed','Stromabgabe ins Netz','kWh'],['storageIn','Stromabgabe in den Speicher','kWh'],['heat','Wärmepumpe Heizung','kWh'],['water','Wärmepumpe Warmwasser','kWh']];document.getElementById('compareResult').innerHTML='<div style="overflow-x:auto"><table style="min-width:440px"><thead><tr><th>Kennzahl</th><th>'+a+'</th><th>'+b+'</th><th>Differenz</th></tr></thead><tbody>'+metrics.map(([k,n,u])=>{let av=sum(a,k),bv=sum(b,k),d=bv-av;return '<tr><td>'+n+'</td><td>'+ (u==='€'?money(av):fmt(av)+' '+u)+'</td><td>'+(u==='€'?money(bv):fmt(bv)+' '+u)+'</td><td style="color:'+(d>0?'#a65b35':d<0?'#26745e':'inherit')+'">'+(d>0?'+':'')+(u==='€'?money(d):fmt(d)+' '+u)+'</td></tr>';}).join('')+'</tbody></table></div>';}
 document.getElementById('yearSelect').addEventListener('change',e=>{year=+e.target.value;render();});
-document.getElementById('copyPrev').addEventListener('click',()=>{if(year===2025){alert('Für 2025 gibt es kein Vorjahr in dieser App.');return;}if(!confirm('Die Monatswerte aus '+(year-1)+' nach '+year+' kopieren? Vorhandene Werte im Zieljahr werden überschrieben.'))return;ensure(year-1);data[year]=JSON.parse(JSON.stringify(data[year-1]));save();render();});
+document.getElementById('copyPrev').addEventListener('click',()=>{if(year===2026){alert('Für 2026 gibt es kein Vorjahr in dieser App.');return;}if(!confirm('Die Monatswerte aus '+(year-1)+' nach '+year+' kopieren? Vorhandene Werte im Zieljahr werden überschrieben.'))return;ensure(year-1);data[year]=JSON.parse(JSON.stringify(data[year-1]));save();render();});
 document.getElementById('compareBtn').addEventListener('click',compare);
 document.getElementById('exportBtn').addEventListener('click',()=>{
  let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
  let url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download='stromdaten-2025-2040.json';a.click();
+ a.href=url;a.download='stromdaten-2026-2045.json';a.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
  localStorage.setItem('stromuebersicht_last_backup',new Date().toISOString());
  showBackupDate();
  document.getElementById('saveStatus').textContent='✓ Sicherungsdatei wurde erstellt. Bitte im Ordner Downloads aufbewahren.';
 });
-document.getElementById('importFile').addEventListener('change',e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let obj=JSON.parse(r.result);if(!obj||typeof obj!=='object')throw 0;for(let y=2025;y<=2040;y++)if(obj[y]&&Array.isArray(obj[y])&&obj[y].length===12)data[y]=obj[y];save();render();alert('Daten wurden importiert.');}catch(err){alert('Die Datei konnte nicht gelesen werden. Bitte eine zuvor exportierte JSON-Datei wählen.');}};r.readAsText(f);e.target.value='';});
-window.addEventListener('resize',()=>drawCharts());for(let y=2025;y<=2040;y++)ensure(y);render();showBackupDate();
+document.getElementById('importFile').addEventListener('change',e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let obj=JSON.parse(r.result);if(!obj||typeof obj!=='object')throw 0;for(let y=2026;y<=2045;y++)if(obj[y]&&Array.isArray(obj[y])&&obj[y].length===12)data[y]=obj[y];save();render();alert('Daten wurden importiert.');}catch(err){alert('Die Datei konnte nicht gelesen werden. Bitte eine zuvor exportierte JSON-Datei wählen.');}};r.readAsText(f);e.target.value='';});
+window.addEventListener('resize',()=>drawCharts());for(let y=2026;y<=2045;y++)ensure(y);render();showBackupDate();
 </script>
 
 <script>
